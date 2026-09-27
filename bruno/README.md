@@ -40,7 +40,7 @@ Uruchomienie całej kolekcji włącza, a następnie wyłącza fake światło.
 
 Testy weryfikują statusy HTTP, UUID w `X-Trace-ID`, kontrakt `ChatResult`,
 strukturę błędów 422 oraz oczekiwane wykonania narzędzi. Nie porównują dokładnej
-treści odpowiedzi modelu. Przykłady narzędzi wymagają działającej Ollamy:
+treści odpowiedzi modelu. Przykłady narzędzi wymagają działającego providera LLM:
 brak oczekiwanej akcji powoduje błąd testu, nawet gdy API zwróci HTTP 200.
 Test własnej wiadomości sprawdza sam kontrakt i może przejść również wtedy,
 gdy backend zgłasza niedostępność modelu.
@@ -61,3 +61,15 @@ bru run '04 Dokumentacja' --env 'Silver Monkey DEV'
 Zgodnie z `AGENTS.md` kolekcja jest częścią kontraktu API. Każda zmiana
 endpointów, requestów lub odpowiedzi wymaga aktualizacji plików `.bru`,
 przykładów, asercji i, jeśli potrzeba, zmiennych środowiska.
+
+
+## Wybór transportu LLM
+
+Kolekcja działa z `LLM_PROVIDER=ollama` i `LLM_PROVIDER=rabbitmq` bez zmiany
+requestów ani asercji. Provider jest wybierany w ENV backendu, nie w Bruno.
+Dla RabbitMQ pełne wykonanie przykładów tools wymaga workera obsługującego
+AMQP `reply_to` oraz `RABBITMQ_REPLY_TO_ENABLED=true`. Obecny opisany worker
+wysyła wyniki tylko do `llm.results`, więc round-trip PROD jest zablokowany.
+Szczegóły wymaganej zmiany są w głównym README. Health i walidacja nadal działają
+bez brokera i modelu. Dla RabbitMQ ustaw timeout klienta na co najmniej 1560000 ms
+(5 kroków po 300 s plus czas zamknięcia połączeń i zapas).

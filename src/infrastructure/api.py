@@ -2,14 +2,13 @@ import logging
 from contextlib import asynccontextmanager
 from uuid import uuid4
 
-import httpx
 from fastapi import FastAPI, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.application.agent import AgentEngine, ChatResult
 from src.infrastructure.config import Settings
 from src.infrastructure.fake_home import FakeHomeState, create_registry
-from src.infrastructure.ollama import OllamaLLMProvider
+from src.infrastructure.providers import create_provider
 
 
 class ChatRequest(BaseModel):
@@ -26,10 +25,9 @@ def create_app(engine: AgentEngine | None = None) -> FastAPI:
             yield
         else:
             settings = Settings()
-            async with httpx.AsyncClient(base_url=str(settings.ollama_url),
-                                         timeout=settings.ollama_timeout_seconds) as client:
+            async with create_provider(settings) as provider:
                 app.state.engine = AgentEngine(
-                    OllamaLLMProvider(client, settings.ollama_model),
+                    provider,
                     create_registry(FakeHomeState()), settings.agent_max_steps)
                 yield
 

@@ -38,12 +38,12 @@ tests {
   });
   test("Wykonano oczekiwane narzędzie", function () {
     const action = res.getBody().actions.find(a => a.tool === "turn_off_light" && a.error === null);
-    expect(action, "Model powinien wykonać narzędzie; sprawdź Ollamę i actions").to.exist;
+    expect(action, "Model powinien wykonać narzędzie; sprawdź provider LLM i actions").to.exist;
     expect(action.arguments).to.deep.equal({room: "attic"});
     expect(action.result).to.equal("success");
   });
 }
 
 docs {
-  Edytuj message w zakładce Body. Wymaga działającej Ollamy i modelu obsługującego tools. Zmiany światła dotyczą tylko FakeHomeState.
+  Edytuj message w zakładce Body. Wymaga działającego providera LLM i modelu obsługującego tools. RabbitMQ wymaga obsługi reply_to przez worker. Zmiany światła dotyczą tylko FakeHomeState.
 }

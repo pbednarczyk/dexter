@@ -29,12 +29,14 @@ DEV. Kod `src/` oraz testy są bind mountami; Uvicorn działa z `--reload`.
 Zmiany kodu nie wymagają rebuildowania. Zmiany zależności wymagają `make up`.
 Makefile domyślnie wyłącza delegowanie budowy do Bake (`COMPOSE_BAKE=false`),
 aby działać także z lokalną konfiguracją pluginów Docker na Silver Monkey.
-Port API jest udostępniony lokalnie na `127.0.0.1:8000`.
+Port API jest domyślnie udostępniony lokalnie na `127.0.0.1:8000`.
+DEV na Silver Monkey zachowuje `DEXTER_PORT=8000`.
 
 ## Konfiguracja
 
 | ENV | Znaczenie |
 | --- | --- |
+| `DEXTER_PORT` | Port hosta w Compose, domyślnie `8000`; port aplikacji w kontenerze zawsze `8000` |
 | `APP_ENV` | Etykieta środowiska, domyślnie `dev` |
 | `OLLAMA_URL` | Wymagany URL; przykład `http://host.docker.internal:11434` |
 | `OLLAMA_MODEL` | Wymagana nazwa modelu, np. `qwen3:14b` |
@@ -101,3 +103,20 @@ pozostają w warstwie aplikacji.
 Kod i pliki Compose nie zawierają ścieżek Silver Monkey. Repo może później
 trafić do `/srv/dexter/core`; bazowy `compose.yaml` uruchamia kod z obrazu
 bez reloadu. Produkcyjny deployment pozostaje poza zakresem tego etapu.
+
+
+## Port hosta na serwerze DEXTER
+
+Na serwerze port 8000 zajmuje WordTracker NLP. Ustaw w `.env` np.
+`DEXTER_PORT=8001`, wybierając wolny port hosta. Compose używa mapowania
+`127.0.0.1:${DEXTER_PORT:-8000}:8000`; brak lub pusta wartość oznacza port 8000.
+Zmienna jest odczytywana przez Compose z `.env` lub środowiska powłoki.
+
+Przykład uruchomienia bazowej konfiguracji z innym portem:
+
+```bash
+DEXTER_PORT=8001 docker compose -f compose.yaml up -d --build
+curl http://localhost:8001/health
+```
+
+Wewnętrzny port Uvicorna i healthcheck kontenera pozostają na 8000.

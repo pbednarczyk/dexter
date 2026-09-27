@@ -1,0 +1,19 @@
+meta {
+  name: OpenAPI JSON
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/openapi.json
+  body: none
+  auth: none
+}
+
+tests {
+  test("Schemat udostępnia oba endpointy", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().paths["/health"]).to.have.property("get");
+    expect(res.getBody().paths["/api/chat"]).to.have.property("post");
+  });
+}

@@ -120,3 +120,14 @@ curl http://localhost:8001/health
 ```
 
 Wewnętrzny port Uvicorna i healthcheck kontenera pozostają na 8000.
+
+## Obsługa API w Bruno
+
+Otwórz katalog [`bruno/`](bruno/) jako kolekcję i wybierz **Silver Monkey DEV**
+(`baseUrl=http://localhost:8000`). Kolekcja zawiera healthcheck, gotowe wiadomości
+chat dla wszystkich czterech narzędzi domu, własną wiadomość, przykłady błędów
+walidacji oraz endpointy dokumentacji. Dla serwera wybierz **DEXTER Server Local**
+i dostosuj port w `baseUrl` do `DEXTER_PORT`.
+
+Instrukcje, zmienne i uruchamianie asercji opisano w [bruno/README.md](bruno/README.md).
+Kolekcja stanowi część kontraktu API i musi być aktualizowana razem z endpointami.

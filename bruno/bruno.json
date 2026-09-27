@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "DEXTER 0.1 \u2014 Local Jarvis",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}

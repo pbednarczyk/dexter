@@ -1,0 +1,18 @@
+meta {
+  name: ReDoc
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/redoc
+  body: none
+  auth: none
+}
+
+tests {
+  test("Dokumentacja HTML jest dostępna", function () {
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getHeader("content-type")).to.include("text/html");
+  });
+}

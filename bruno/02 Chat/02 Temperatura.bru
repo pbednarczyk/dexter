@@ -1,0 +1,49 @@
+meta {
+  name: Temperatura na strychu
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/chat
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "message": "Jaka jest temperatura na strychu?"
+  }
+}
+
+tests {
+  test("Kontrakt odpowiedzi ChatResult", function () {
+    expect(res.getStatus()).to.equal(200);
+    const body = res.getBody();
+    expect(body.trace_id).to.equal(res.getHeader("x-trace-id"));
+    expect(body.response).to.be.a("string").and.not.empty;
+    expect(body.actions).to.be.an("array");
+    expect(body.actions.length).to.be.at.most(5);
+    body.actions.forEach(function (action) {
+      expect(action.tool).to.be.a("string");
+      expect(action).to.have.property("arguments");
+      expect(action).to.have.property("result");
+      expect(action).to.have.property("error");
+      if (action.error !== null) expect(action.error).to.be.a("string");
+    });
+  });
+  test("Wykonano oczekiwane narzędzie", function () {
+    const action = res.getBody().actions.find(a => a.tool === "get_temperature" && a.error === null);
+    expect(action, "Model powinien wykonać narzędzie; sprawdź Ollamę i actions").to.exist;
+    expect(action.arguments).to.deep.equal({room: "attic"});
+    expect(action.result).to.equal(21.7);
+  });
+}
+
+docs {
+  Edytuj message w zakładce Body. Wymaga działającej Ollamy i modelu obsługującego tools. Zmiany światła dotyczą tylko FakeHomeState.
+}

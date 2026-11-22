@@ -1,8 +1,8 @@
-# DEXTER 0.1 / Local Jarvis
+# DEXTER 0.2 / Local Jarvis
 
 Minimalny lokalny backend agenta: FastAPI, Ollama HTTP i jawnie dozwolone
-narzędzia domu. DEV działa na Silver Monkey. Brak integracji z prawdziwym HA,
-pamięci rozmów, voice, schedulerów i cloud fallback.
+narzędzia domu. DEV działa na Silver Monkey. Core może korzystać z symulacji
+lub odczytywać bieżące stany urządzeń z Home Assistant.
 
 ## Uruchomienie DEV
 
@@ -10,7 +10,7 @@ Wymagania: Docker z Compose v2, Make i Ollama na hoście z pobranym modelem
 obsługującym tools (np. `ollama pull qwen3:14b`).
 
 ```bash
-cp .env.example .env
+cp -n .env.example .env
 make up
 curl http://localhost:8000/health
 curl -X POST http://localhost:8000/api/chat \
@@ -44,6 +44,10 @@ DEV na Silver Monkey zachowuje `DEXTER_PORT=8000`.
 | `OLLAMA_MODEL` | Wymagana nazwa modelu, np. `qwen3:14b` |
 | `AGENT_MAX_STEPS` | Liczba wywołań LLM oraz limit wykonań tools, 1–5, domyślnie 5 |
 | `OLLAMA_TIMEOUT_SECONDS` | Timeout HTTP Ollamy, domyślnie 120 s |
+| `HOME_BACKEND` | `fake` (domyślnie) albo `ha` |
+| `HA_URL` | Bazowy URL Home Assistant, wymagany w trybie `ha` |
+| `HA_TOKEN` | Lokalny token dostępu Home Assistant, wymagany w trybie `ha` |
+| `HA_TIMEOUT_SECONDS` | Timeout HTTP Home Assistant, domyślnie 5 s |
 
 `.env` jest ignorowany przez Git i nie trafia do obrazu. Model i URL nie mają
 wartości zaszytych w adapterze. `/health` sprawdza działanie API, nie modelu.
@@ -58,7 +62,7 @@ make test
 ```
 
 Testy używają `MockLLMProvider`, `httpx.MockTransport` i mockowanego transportu
-AMQP, bez działającej Ollamy ani RabbitMQ.
+AMQP, bez działającej Ollamy, RabbitMQ ani Home Assistant.
 Alternatywnie lokalnie, Python 3.12+:
 
 ```bash
@@ -73,16 +77,16 @@ python3 -m venv .venv
 src/
   domain/          # kontrakty LLMProvider, Tool, wiadomości
   application/     # AgentEngine, ToolRegistry i ślad akcji
-  infrastructure/  # FastAPI, ENV, Ollama i FakeHomeState
+  infrastructure/  # FastAPI, ENV, dostawcy LLM i adaptery domu
 tests/             # mock modelu i testy bez usług zewnętrznych
 ```
 
 `LLMProvider.chat()` obsługuje odpowiedzi tekstowe oraz tool calls. Adapter
 Ollama korzysta z [POST /api/chat](https://docs.ollama.com/api/chat), bez streamingu.
 Rejestr udostępnia modelowi schematy Pydantic; odrzuca nieznane nazwy,
-nieprawidłowe argumenty, dodatkowe pola i nieobsługiwane pokoje.
+nieprawidłowe argumenty i dodatkowe pola.
 
-MVP zna tylko `attic` (strych): temperatura 21.7°C, światło początkowo `off`.
+Tryb `fake` zna tylko `attic` (strych): temperatura 21.7°C, światło początkowo `off`.
 Tools: `get_temperature`, `get_light_state`, `turn_on_light`, `turn_off_light`.
 Stan jest wspólny dla żądań w jednym procesie i resetuje się po restarcie
 lub reloadzie. Uruchamiaj jeden worker dla tego adaptera in-memory.
@@ -94,14 +98,32 @@ kroku mogą zostać wykonane bez kolejnego podsumowania LLM — wtedy odpowiedź
 informuje o limicie, a `actions` zachowuje wyniki. Nie ma automatycznych
 retry ani rollbacku wykonanych operacji.
 
-## Późniejszy adapter Home Assistant
+## Odczyt z Home Assistant
 
-Dodaj w `infrastructure/` implementacje kontraktu `Tool` i zarejestruj je
-zamiast `create_registry(FakeHomeState())` w fabryce API. Pętla agenta i API
-pozostają takie same. HA będzie źródłem prawdy o domu; adapter ma odczytywać
-stan z HA. Model ma otrzymywać wyłącznie jawnie wystawione narzędzia,
-bez tokenu ani dostępu administracyjnego. Walidacja argumentów i trace
-pozostają w warstwie aplikacji.
+Ustaw `HOME_BACKEND=ha` w lokalnym `.env`. Użyj bazowego adresu
+`HA_URL=http://100.120.58.119:8123` i zapisanego lokalnie `HA_TOKEN`.
+Core musi mieć dostęp sieciowy do tego adresu. Uwierzytelnianie Bearer
+odbywa się w Core.
+
+- `list_entities` pobiera `GET /api/states` i zwraca do 20 wyników domyślnie.
+  Można podać `query` (fragment nazwy lub identyfikatora, bez rozróżniania
+  wielkości liter), `domain` (np. `light`) i `limit` od 1 do 50.
+  Wynik zawiera `entity_id`, `name` i `state`.
+- `get_entity_state` pobiera `GET /api/states/{entity_id}` dla dokładnego
+  identyfikatora, np. `light.strych_swiatlo`. Zwraca te same pola oraz wybrane
+  atrybuty, jeśli są dostępne, np. jasność, temperaturę i jednostkę pomiaru.
+  Brak encji, błąd autoryzacji i timeout trafiają do `actions[].error`.
+
+Model ma dostęp tylko do tych dwóch narzędzi. Wyszukiwanie opiera się na
+tekście. Wyniki zależą od nazw i identyfikatorów nadanych w Home Assistant,
+a przypisanie encji do obszarów jest poza zakresem tego adaptera.
+[Dokumentacja REST API Home Assistant](https://contributors.home-assistant.io/core/internals/rest-api/)
+
+Przykładowe wiadomości do `POST /api/chat` w trybie `ha`:
+
+- „Czy światło na strychu jest włączone?”
+- „Znajdź wszystkie światła w jaskini.”
+- „Jaka jest temperatura w salonie?”
 
 Kod i pliki Compose nie zawierają ścieżek Silver Monkey. Repo może później
 trafić do `/srv/dexter/core`; bazowy `compose.yaml` uruchamia kod z obrazu
@@ -128,7 +150,7 @@ Wewnętrzny port Uvicorna i healthcheck kontenera pozostają na 8000.
 
 Otwórz katalog [`bruno/`](bruno/) jako kolekcję i wybierz **Silver Monkey DEV**
 (`baseUrl=http://localhost:8000`). Kolekcja zawiera healthcheck, gotowe wiadomości
-chat dla wszystkich czterech narzędzi domu, własną wiadomość, przykłady błędów
+chat dla trybów `fake` i `ha`, własną wiadomość, przykłady błędów
 walidacji oraz endpointy dokumentacji. Dla serwera wybierz **DEXTER Server Local**
 i dostosuj port w `baseUrl` do `DEXTER_PORT`.
 

@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from src.application.agent import AgentEngine, ChatResult
 from src.infrastructure.config import Settings
-from src.infrastructure.fake_home import FakeHomeState, create_registry
+from src.infrastructure.home_assistant import create_home_registry
 from src.infrastructure.providers import create_provider
 
 
@@ -25,10 +25,8 @@ def create_app(engine: AgentEngine | None = None) -> FastAPI:
             yield
         else:
             settings = Settings()
-            async with create_provider(settings) as provider:
-                app.state.engine = AgentEngine(
-                    provider,
-                    create_registry(FakeHomeState()), settings.agent_max_steps)
+            async with create_provider(settings) as provider, create_home_registry(settings) as registry:
+                app.state.engine = AgentEngine(provider, registry, settings.agent_max_steps)
                 yield
 
     app = FastAPI(title="DEXTER", version="0.1.0", lifespan=lifespan)

@@ -1,0 +1,44 @@
+meta {
+  name: Szukaj świateł w jaskini
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/chat
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "message": "Znajdź wszystkie światła w jaskini. Wyszukaj encje domeny light pasujące do nazwy jaskinia."
+  }
+}
+
+tests {
+  test("Kontrakt odpowiedzi i wynik wyszukiwania", function () {
+    expect(res.getStatus()).to.equal(200);
+    const body = res.getBody();
+    expect(body.trace_id).to.equal(res.getHeader("x-trace-id"));
+    expect(body.response).to.be.a("string");
+    expect(body.actions).to.be.an("array");
+    const action = body.actions.find(a => a.tool === "list_entities" && a.error === null);
+    expect(action, "Wymaga trybu HA i działającego modelu").to.exist;
+    expect(action.result).to.be.an("array");
+    expect(action.result.length).to.be.at.most(action.arguments.limit ?? 20);
+    action.result.forEach(entity => {
+      expect(entity.entity_id).to.match(/^light\./);
+      expect(entity.name).to.be.a("string");
+      expect(entity.state).to.be.a("string");
+    });
+  });
+}
+
+docs {
+  Wymaga HOME_BACKEND=ha i działającego providera LLM. Pusta lista oznacza brak dopasowań tekstowych.
+}

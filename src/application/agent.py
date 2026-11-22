@@ -34,7 +34,10 @@ class AgentEngine:
         messages = [Message(role="system", content=(
             "Jesteś DEXTER, lokalny asystent domu. Odpowiadaj po polsku. "
             "Stan domu sprawdzaj wyłącznie przez dostępne narzędzia. "
-            "Strych to room=attic. Nie wymyślaj wyników ani sukcesu operacji. "
+            "W narzędziach z parametrem room strych to attic. "
+            "Gdy masz list_entities, szukaj po nazwie lub identyfikatorze, "
+            "a wyniki traktuj jako dopasowania tekstowe. "
+            "Nie wymyślaj wyników ani sukcesu operacji. "
             "Błąd narzędzia oznacza, że operacja nie została potwierdzona."
         )), Message(role="user", content=text)]
         actions = []

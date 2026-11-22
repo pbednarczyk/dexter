@@ -1,0 +1,50 @@
+meta {
+  name: Temperatura na strychu
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/chat
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "message": "Jaka jest temperatura na strychu? Wyszukaj sensory w obszarze Strych."
+  }
+}
+
+tests {
+  test("Kontrakt odpowiedzi i wynik wyszukiwania", function () {
+    expect(res.getStatus()).to.equal(200);
+    const body = res.getBody();
+    expect(body.trace_id).to.equal(res.getHeader("x-trace-id"));
+    expect(body.response).to.be.a("string");
+    expect(body.actions).to.be.an("array");
+    const action = body.actions.find(a => a.tool === "list_entities" && a.error === null && a.arguments.domain === "sensor" && a.arguments.area?.toLowerCase() === "strych");
+    expect(action, "Wymaga trybu HA i działającego modelu").to.exist;
+    const result = action.result;
+    expect(result.entities).to.be.an("array");
+    expect(result.entities.length).to.be.at.most(action.arguments.limit ?? 20);
+    expect(result.total_count).to.be.a("number").and.at.least(result.entities.length);
+    expect(result.truncated).to.equal(result.total_count > result.entities.length);
+    expect(result.metadata_available).to.be.a("boolean");
+    result.entities.forEach(entity => {
+      expect(entity.name).to.be.a("string");
+      expect(entity.state).to.be.a("string");
+      expect(entity.labels).to.be.an("array");
+      expect(entity.entity_id).to.match(/^sensor\./);
+      expect([entity.area.id, entity.area.name].some(value => value.toLowerCase() === "strych")).to.equal(true);
+    });
+  });
+}
+
+docs {
+  Wymaga HOME_BACKEND=ha i działającego providera LLM. Wyniki zależą od konfiguracji Home Assistant.
+}

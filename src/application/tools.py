@@ -22,5 +22,10 @@ class ToolRegistry:
         try:
             validated = tool.arguments_model.model_validate(arguments)
         except ValidationError as exc:
-            raise ToolError("Invalid tool arguments") from exc
+            details = []
+            for error in exc.errors(include_input=False, include_context=False, include_url=False):
+                location = error["loc"]
+                field = location[0] if location and location[0] in tool.arguments_model.model_fields else "arguments"
+                details.append(f"{field}: {error['msg']}")
+            raise ToolError("Invalid tool arguments: " + "; ".join(details[:10])) from None
         return await tool.execute(validated)

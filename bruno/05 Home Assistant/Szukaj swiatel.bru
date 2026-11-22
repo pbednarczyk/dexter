@@ -1,5 +1,5 @@
 meta {
-  name: Szukaj świateł w jaskini
+  name: Światła z etykietą jaskinia
   type: http
   seq: 1
 }
@@ -16,7 +16,7 @@ headers {
 
 body:json {
   {
-    "message": "Znajdź wszystkie światła w jaskini. Wyszukaj encje domeny light pasujące do nazwy jaskinia."
+    "message": "Jakie światła mają etykietę jaskinia? Użyj filtrów domain=light i label=jaskinia."
   }
 }
 
@@ -27,18 +27,24 @@ tests {
     expect(body.trace_id).to.equal(res.getHeader("x-trace-id"));
     expect(body.response).to.be.a("string");
     expect(body.actions).to.be.an("array");
-    const action = body.actions.find(a => a.tool === "list_entities" && a.error === null);
+    const action = body.actions.find(a => a.tool === "list_entities" && a.error === null && a.arguments.domain === "light" && a.arguments.label?.toLowerCase() === "jaskinia");
     expect(action, "Wymaga trybu HA i działającego modelu").to.exist;
-    expect(action.result).to.be.an("array");
-    expect(action.result.length).to.be.at.most(action.arguments.limit ?? 20);
-    action.result.forEach(entity => {
-      expect(entity.entity_id).to.match(/^light\./);
+    const result = action.result;
+    expect(result.entities).to.be.an("array");
+    expect(result.entities.length).to.be.at.most(action.arguments.limit ?? 20);
+    expect(result.total_count).to.be.a("number").and.at.least(result.entities.length);
+    expect(result.truncated).to.equal(result.total_count > result.entities.length);
+    expect(result.metadata_available).to.be.a("boolean");
+    result.entities.forEach(entity => {
       expect(entity.name).to.be.a("string");
       expect(entity.state).to.be.a("string");
+      expect(entity.labels).to.be.an("array");
+      expect(entity.entity_id).to.match(/^light\./);
+      expect(entity.labels.some(label => [label.id, label.name].some(value => value.toLowerCase() === "jaskinia"))).to.equal(true);
     });
   });
 }
 
 docs {
-  Wymaga HOME_BACKEND=ha i działającego providera LLM. Pusta lista oznacza brak dopasowań tekstowych.
+  Wymaga HOME_BACKEND=ha i działającego providera LLM. Wyniki zależą od konfiguracji Home Assistant.
 }

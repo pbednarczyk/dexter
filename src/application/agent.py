@@ -35,8 +35,11 @@ class AgentEngine:
             "Jesteś DEXTER, lokalny asystent domu. Odpowiadaj po polsku. "
             "Stan domu sprawdzaj wyłącznie przez dostępne narzędzia. "
             "W narzędziach z parametrem room strych to attic. "
-            "Gdy masz list_entities, szukaj po nazwie lub identyfikatorze, "
-            "a wyniki traktuj jako dopasowania tekstowe. "
+            "Gdy masz list_entities, używaj filtrów state dla stanu, area dla obszaru "
+            "i label dla etykiety. Query jest opcjonalne i szuka w nazwie oraz identyfikatorze. "
+            "Dla temperatury w pomieszczeniu zacznij od domain=sensor i area. "
+            "Uwzględniaj total_count i informuj o ucięciu listy, gdy truncated=true. "
+            "Przy metadata_available=false przypisania do obszarów i etykiet są nieznane. "
             "Nie wymyślaj wyników ani sukcesu operacji. "
             "Błąd narzędzia oznacza, że operacja nie została potwierdzona."
         )), Message(role="user", content=text)]

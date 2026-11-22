@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     ha_url: AnyHttpUrl | None = None
     ha_token: SecretStr = SecretStr("")
     ha_timeout_seconds: float = Field(default=5, gt=0, allow_inf_nan=False)
+    ha_registry_cache_ttl_seconds: float = Field(default=60, gt=0, allow_inf_nan=False)
     ollama_timeout_seconds: float = Field(default=120, gt=0, allow_inf_nan=False)
     rabbitmq_host: str | None = None
     rabbitmq_port: int = Field(default=5672, ge=1, le=65535)

@@ -32,7 +32,9 @@ Przy wolnym modelu ustaw timeout requestów w Bruno na co najmniej 660000 ms
   światła przez `POST /api/chat`. Wszystkie przykłady mają gotowe treści `message`.
 - Walidacja: pusta wiadomość, brak pola, błędny typ i dodatkowe pole — HTTP 422.
 - Dokumentacja: OpenAPI JSON, Swagger UI i ReDoc.
-- Home Assistant: wyszukiwanie encji przez `POST /api/chat` w trybie `ha`.
+- Home Assistant — wyszukiwanie po stanie, etykiecie i obszarze przez `POST /api/chat` w trybie `ha`.
+  Asercje sprawdzają `actions[].result.entities`, `total_count` i `truncated`.
+  Dopasowania zależą od nazw i przypisań w lokalnym HA.
 
 Narzędzia nie mają osobnych endpointów HTTP: wywołuje je model przez chat.
 Przykłady operują na `attic` (strych). Temperatura fake to 21.7°C; stan światła
@@ -55,7 +57,7 @@ Po zainstalowaniu [Bruno CLI](https://docs.usebruno.com/bru-cli/overview):
 cd bruno
 # Przykłady symulacji z HOME_BACKEND=fake:
 bru run '02 Chat' --env 'Silver Monkey DEV'
-# Przykład odczytu z HOME_BACKEND=ha:
+# Przykłady odczytu z HOME_BACKEND=ha:
 bru run '05 Home Assistant' --env 'Silver Monkey DEV'
 # Kontrola niezależna od Ollamy:
 bru run '01 Health' --env 'Silver Monkey DEV'

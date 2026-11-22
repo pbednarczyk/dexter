@@ -11,6 +11,7 @@ from src.application.tools import ToolRegistry
 from src.domain.tools import ToolError
 from src.infrastructure.config import Settings
 from src.infrastructure.fake_home import FakeHomeState, create_registry
+from src.infrastructure.ha_registries import EntityMetadata, HomeAssistantRegistries
 
 ENTITY_ID_PATTERN = r"^[a-z0-9_]+\.[a-z0-9_]+$"
 MAX_ENTITY_ID_LENGTH = 255
@@ -18,8 +19,11 @@ MAX_ENTITY_ID_LENGTH = 255
 
 class ListEntitiesArguments(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, str_strip_whitespace=True)
-    query: str | None = Field(default=None, min_length=1, max_length=255)
+    query: str | None = Field(default=None, max_length=255, description="Substring of name or entity ID. Omit or pass an empty string to skip.")
     domain: str | None = Field(default=None, pattern=r"^[a-z0-9_]+$", max_length=255)
+    state: str | None = Field(default=None, min_length=1, max_length=255, description="Exact current state, e.g. on, off or unavailable.")
+    area: str | None = Field(default=None, min_length=1, max_length=255, description="Exact area name or ID, case-insensitive.")
+    label: str | None = Field(default=None, min_length=1, max_length=255, description="Exact label name or ID, case-insensitive. Includes inherited labels.")
     limit: int = Field(default=20, ge=1, le=50)
 
 
@@ -89,17 +93,27 @@ def _search_text(value: str) -> str:
 @dataclass
 class ListEntities:
     client: HomeAssistantClient
+    registries: HomeAssistantRegistries
     name = "list_entities"
     description = (
-        "Find Home Assistant entities by substring of friendly name or entity ID (query), "
-        "optionally restricted to an exact domain such as light, switch or sensor. "
-        "Returns up to limit results. Room membership is not available."
+        "Find Home Assistant entities. Combine optional filters query, domain, state, area and label. "
+        "For lights that are on use domain=light and state=on with no query. "
+        "Returns entities, total_count, truncated and metadata_available."
     )
     arguments_model = ListEntitiesArguments
 
-    async def execute(self, arguments: ListEntitiesArguments) -> list[dict]:
+    async def execute(self, arguments: ListEntitiesArguments) -> dict:
+        try:
+            metadata = await self.registries.get()
+        except ToolError:
+            if arguments.area or arguments.label:
+                raise
+            metadata = None
+
         query = _search_text(arguments.query or "")
+        empty_metadata = EntityMetadata()
         matches = []
+        total_count = 0
         for state in await self.client.list_states():
             if not isinstance(state, dict) or not isinstance(state.get("state"), str):
                 continue
@@ -109,12 +123,29 @@ class ListEntities:
                 continue
             if arguments.domain and entity_id.split(".", 1)[0] != arguments.domain:
                 continue
+            if arguments.state is not None and state["state"] != arguments.state:
+                continue
             summary = _summary(state)
-            if query in _search_text(summary["name"]) or query in _search_text(entity_id):
-                matches.append(summary)
-                if len(matches) == arguments.limit:
-                    break
-        return matches
+            if query not in _search_text(summary["name"]) and query not in _search_text(entity_id):
+                continue
+            details = metadata.get(entity_id, empty_metadata) if metadata is not None else empty_metadata
+            if arguments.area and (details.area is None or not details.area.matches(arguments.area)):
+                continue
+            if arguments.label and not any(label.matches(arguments.label) for label in details.labels):
+                continue
+            total_count += 1
+            if len(matches) < arguments.limit:
+                matches.append({
+                    **summary,
+                    "area": details.area.as_result() if details.area else None,
+                    "labels": [label.as_result() for label in details.labels],
+                })
+        return {
+            "entities": matches,
+            "total_count": total_count,
+            "truncated": total_count > len(matches),
+            "metadata_available": metadata is not None,
+        }
 
 
 @dataclass
@@ -145,6 +176,10 @@ async def create_home_registry(settings: Settings) -> AsyncIterator[ToolRegistry
     if settings.home_backend == "fake":
         yield create_registry(FakeHomeState())
     else:
+        registries = HomeAssistantRegistries(
+            httpx.URL(str(settings.ha_url)), settings.ha_token, settings.ha_timeout_seconds,
+            settings.ha_registry_cache_ttl_seconds,
+        )
         async with httpx.AsyncClient(
             base_url=str(settings.ha_url),
             headers={"Authorization": f"Bearer {settings.ha_token.get_secret_value()}"},
@@ -152,4 +187,4 @@ async def create_home_registry(settings: Settings) -> AsyncIterator[ToolRegistry
             trust_env=False,
         ) as http_client:
             client = HomeAssistantClient(http_client)
-            yield ToolRegistry([ListEntities(client), GetEntityState(client)])
+            yield ToolRegistry([ListEntities(client, registries), GetEntityState(client)])

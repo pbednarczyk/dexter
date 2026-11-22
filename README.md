@@ -47,7 +47,8 @@ DEV na Silver Monkey zachowuje `DEXTER_PORT=8000`.
 | `HOME_BACKEND` | `fake` (domyślnie) albo `ha` |
 | `HA_URL` | Bazowy URL Home Assistant, wymagany w trybie `ha` |
 | `HA_TOKEN` | Lokalny token dostępu Home Assistant, wymagany w trybie `ha` |
-| `HA_TIMEOUT_SECONDS` | Timeout HTTP Home Assistant, domyślnie 5 s |
+| `HA_TIMEOUT_SECONDS` | Timeout HTTP i odczytu rejestrów WebSocket, domyślnie 5 s |
+| `HA_REGISTRY_CACHE_TTL_SECONDS` | Czas ważności cache rejestrów w procesie Core, domyślnie 60 s |
 
 `.env` jest ignorowany przez Git i nie trafia do obrazu. Model i URL nie mają
 wartości zaszytych w adapterze. `/health` sprawdza działanie API, nie modelu.
@@ -61,8 +62,8 @@ zwracają odpowiedź agenta z zachowaniem wykonanych `actions` (HTTP 200).
 make test
 ```
 
-Testy używają `MockLLMProvider`, `httpx.MockTransport` i mockowanego transportu
-AMQP, bez działającej Ollamy, RabbitMQ ani Home Assistant.
+Testy używają `MockLLMProvider`, `httpx.MockTransport` oraz mocków AMQP
+i WebSocket Home Assistant.
 Alternatywnie lokalnie, Python 3.12+:
 
 ```bash
@@ -105,25 +106,47 @@ Ustaw `HOME_BACKEND=ha` w lokalnym `.env`. Użyj bazowego adresu
 Core musi mieć dostęp sieciowy do tego adresu. Uwierzytelnianie Bearer
 odbywa się w Core.
 
-- `list_entities` pobiera `GET /api/states` i zwraca do 20 wyników domyślnie.
-  Można podać `query` (fragment nazwy lub identyfikatora, bez rozróżniania
-  wielkości liter), `domain` (np. `light`) i `limit` od 1 do 50.
-  Wynik zawiera `entity_id`, `name` i `state`.
-- `get_entity_state` pobiera `GET /api/states/{entity_id}` dla dokładnego
-  identyfikatora, np. `light.strych_swiatlo`. Zwraca te same pola oraz wybrane
-  atrybuty, jeśli są dostępne, np. jasność, temperaturę i jednostkę pomiaru.
-  Brak encji, błąd autoryzacji i timeout trafiają do `actions[].error`.
+Core odczytuje bieżące stany przez REST i pobiera rejestry encji, urządzeń,
+obszarów i etykiet przez `/api/websocket` (`ws` dla HTTP, `wss` dla HTTPS).
+Token służy wyłącznie do uwierzytelnienia w Core. WebSocket wysyła po
+uwierzytelnieniu tylko cztery ustalone komendy listujące rejestry.
+[REST API Home Assistant](https://contributors.home-assistant.io/core/internals/rest-api/)
+[WebSocket API Home Assistant](https://contributors.home-assistant.io/core/internals/websocket-api/)
 
-Model ma dostęp tylko do tych dwóch narzędzi. Wyszukiwanie opiera się na
-tekście. Wyniki zależą od nazw i identyfikatorów nadanych w Home Assistant,
-a przypisanie encji do obszarów jest poza zakresem tego adaptera.
-[Dokumentacja REST API Home Assistant](https://contributors.home-assistant.io/core/internals/rest-api/)
+`list_entities` pobiera `GET /api/states` przy każdym wywołaniu. Wszystkie
+podane filtry muszą pasować do tej samej encji.
 
-Przykładowe wiadomości do `POST /api/chat` w trybie `ha`:
+| Argument | Dopasowanie |
+| --- | --- |
+| `query` | Fragment nazwy lub identyfikatora, bez rozróżniania wielkości liter. Pusty ciąg pomija filtr. |
+| `domain` | Dokładna domena, np. `light` lub `sensor` |
+| `state` | Dokładny bieżący stan, np. `on`, `off` lub `unavailable` |
+| `area` | Dokładna nazwa lub ID obszaru, bez rozróżniania wielkości liter |
+| `label` | Dokładna nazwa lub ID etykiety, bez rozróżniania wielkości liter |
+| `limit` | Liczba zwracanych encji, od 1 do 50, domyślnie 20 |
 
-- „Czy światło na strychu jest włączone?”
-- „Znajdź wszystkie światła w jaskini.”
-- „Jaka jest temperatura w salonie?”
+Obszar encji ma pierwszeństwo przed obszarem jej urządzenia. Etykiety są
+sumą przypisań encji, urządzenia i wybranego obszaru, bez powtórzeń.
+Wynik zawiera tablicę `entities`. Każdy element ma `entity_id`, `name`,
+`state`, `area` (obiekt z `id` i `name` lub `null`) i `labels` (tablicę
+obiektów z `id` i `name`). Pole `total_count` liczy wszystkie dopasowania,
+a `truncated` wskazuje, czy limit skrócił listę.
+
+Przypisania są przechowywane przez okres ustawiony w
+`HA_REGISTRY_CACHE_TTL_SECONDS`. Gdy WebSocket jest niedostępny, filtry
+`area` i `label` zwracają błąd. Pozostałe filtry nadal działają na stanach
+REST, a wynik zawiera `metadata_available: false`.
+
+`get_entity_state` pobiera `GET /api/states/{entity_id}` dla dokładnego
+identyfikatora, np. `sensor.strych_temperatura`. Zwraca nazwę, stan i wybrane
+atrybuty, jeśli są dostępne, np. jednostkę pomiaru. Błędy odczytu i szczegóły
+walidacji argumentów są dostępne w `actions[].error` i trafiają do modelu.
+
+Przykładowe wiadomości do `POST /api/chat` w trybie `ha` obejmują:
+
+- „Które światła są włączone?”
+- „Jakie światła mają etykietę jaskinia?”
+- „Jaka jest temperatura na strychu?”
 
 Kod i pliki Compose nie zawierają ścieżek Silver Monkey. Repo może później
 trafić do `/srv/dexter/core`; bazowy `compose.yaml` uruchamia kod z obrazu
